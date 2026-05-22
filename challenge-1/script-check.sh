@@ -1,6 +1,6 @@
 #!/bin/bash
 
-read -p "Input path folder log: " userInput
+read -p "Masukkan path folder log: " userInput
 logDir="${userInput:-.}"
 executedAt=$(date +"%Y-%m-%dT%H:%M:%S.000")
 
@@ -8,15 +8,19 @@ echo "Executed at $executedAt"
 echo ""
 
 for logFile in "$logDir"/*.log; do
-    count=0
+    lastTimestamp=$(tail -1 "$logFile" | awk '{print $4}' | tr -d '[')
 
-    for i in $(seq 10 -1 0); do
-        minutes=$(date -u -d "$i minutes ago" +"%d/%b/%Y:%H:%M")
-        matches=$(grep "$minutes" "$logFile" | grep -c " 500 ")
-        count=$(( count + matches ))
-    done
 
-    basename=$(basename "$logFile")
-    echo "There were $count HTTP 500 errors in ./$basename in the last 10 minutes."
+    convertToIso=$(echo "$lastTimestamp" | awk -F'[/:]' '{
+        months="JanFebMarAprMayJunJulAugSepOctNovDec"
+        month_num = (index(months, $2) + 2) / 3
+        printf "%04d-%02d-%02d %02d:%02d:%02d", $3, month_num, $1, $4, $5, $6
+    }')
+
+    cutoff=$(date -u -d "@$(( $(date -u -d "$normalized" +%s) - 600 ))" +"%d/%b/%Y:%H:%M")
+
+    count=$(awk -v cutoff="$cutoff" '$4 > "[" cutoff && $9 == "500"' "$logFile" | wc -l)
+
+    echo "There were $count HTTP 500 errors in ./$(basename "$logFile") in the last 10 minutes."
     
 done
